@@ -1,0 +1,89 @@
+#!/bin/bash
+
+TMP_FILE=/tmp/tmp_config_${$}.json
+SEC_JSON=/tmp/config_${$}.json
+SECRETS_FILE=secrets.txt
+CONFLUENT_HOST=http://localhost:8083
+CONFLUENT_CONNECTOR_JSON=${1}
+OPERATION=${2}
+
+fatal_error() {
+  echo "Fatal : ${1}"
+  exit 1
+}
+
+check_file() {
+  if [ -z ${2} ] ; then  
+    fatal_error "Must specify ${1} \"${2}\""
+  fi
+  if [ ! -f ${2} ] ; then  
+    fatal_error "Unable to open ${1} \"${2}\""
+  fi
+}
+
+do_file_sub() {
+  # Substitute ##tag## with values found in secrets file
+  cp ${CONFLUENT_CONNECTOR_JSON} ${SEC_JSON}
+  cat ${SECRETS_FILE} | while read PAIR; do
+    FROM="##`echo ${PAIR} | cut -d':' -f1`##"
+    TO=`echo ${PAIR} | cut -d':' -f2`
+    cat ${SEC_JSON} | sed 's/'${FROM}'/'${TO}'/g' > ${TMP_FILE}
+    mv ${TMP_FILE} ${SEC_JSON}
+  done
+}
+
+if [ ${#} != 2 ]; then
+  fatal_error "Usage ${0} file [load|status|config|list|pause|resume|delete]"
+fi
+
+check_file "json config file" ${CONFLUENT_CONNECTOR_JSON}
+check_file "secrets file" ${SECRETS_FILE}
+
+CONFLUENT_CONNECTOR_NAME=`basename ${CONFLUENT_CONNECTOR_JSON} .json`
+
+# Unset the proxy environment variables to ensure curl is hitting local only
+unset http_proxy
+unset https_proxy
+
+if [ "x${OPERATION}x" == "xloadx" ]; then
+  do_file_sub
+  echo "Load mode - Loading ${SEC_JSON} to ${CONFLUENT_HOST}/connectors/${CONFLUENT_CONNECTOR_NAME}/config"
+  curl -k -s -S \
+    -X PUT -H "Accept: application/json"  \
+    -H "Content-Type: application/json"   \
+    ${KEY_STRING} \
+    --data "@${SEC_JSON}"   "${CONFLUENT_HOST}/connectors/${CONFLUENT_CONNECTOR_NAME}/config"
+
+elif [ "x${OPERATION}x" == "xstatusx" ]; then
+  curl -k -s -S -X GET ${KEY_STRING} "${CONFLUENT_HOST}/connectors/${CONFLUENT_CONNECTOR_NAME}/status" | jq '.'
+
+elif [ "x${OPERATION}x" == "xconfigx" ]; then
+  curl -k -s -S -X GET ${KEY_STRING} "${CONFLUENT_HOST}/connectors/${CONFLUENT_CONNECTOR_NAME}" | jq '.'
+
+elif [ "x${OPERATION}x" == "xlistx" ]; then
+  curl -k -s -S -X GET ${KEY_STRING} "${CONFLUENT_HOST}/connectors" | jq '.'
+
+elif [ "x${OPERATION}x" == "xpausex" ]; then
+  curl -k -s -S -X PUT ${KEY_STRING} "${CONFLUENT_HOST}/connectors/${CONFLUENT_CONNECTOR_NAME}/pause"
+
+elif [ "x${OPERATION}x" == "xresumex" ]; then
+  curl -k -s -S -X PUT ${KEY_STRING} "${CONFLUENT_HOST}/connectors/${CONFLUENT_CONNECTOR_NAME}/resume"
+
+elif [ "x${OPERATION}x" == "xconfigx" ]; then
+  curl -k -s -S -X PUT ${KEY_STRING} "${CONFLUENT_HOST}/connectors/${CONFLUENT_CONNECTOR_NAME}" | jq '.'
+
+elif [ "x${OPERATION}x" == "xdeletex" ]; then
+  curl -k -s -S -X DELETE ${KEY_STRING} "${CONFLUENT_HOST}/connectors/${CONFLUENT_CONNECTOR_NAME}"
+
+elif [ "x${OPERATION}x" == "xpluginsx" ]; then
+  curl -k -s -S -X GET ${KEY_STRING} "${CONFLUENT_HOST}/connector-plugins" | jq '.'
+
+else
+  fatal_error "Must specify load|status|delete"
+
+fi
+
+rm -f ${SEC_JSON} ${TMP_FILE}
+
+echo
+

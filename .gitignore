@@ -1,0 +1,5 @@
+*.swp
+.env
+custom-plugins/*
+secrets.txt
+license.json
