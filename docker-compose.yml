@@ -106,7 +106,7 @@ services:
       KSQL_KSQL_SERVICE_ID: "cld-ksql-server"
       KSQL_KSQL_EXTENSION_DIR: "/etc/ksql/ext"
     volumes:
-      - ./ext:/etc/ksql/ext
+#      - ./ext:/etc/ksql/ext
       - ./scripts:/scripts
 
   ksql-cli:

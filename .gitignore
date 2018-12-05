@@ -3,3 +3,5 @@
 custom-plugins/*
 secrets.txt
 license.json
+data/*
+data-captured/*
